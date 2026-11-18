@@ -1,1 +1,2 @@
- nerf-world-story 的 .zcode-site/
+.zcode-site/stage/
+__pycache__/
