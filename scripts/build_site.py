@@ -21,7 +21,7 @@ os.makedirs(OUT, exist_ok=True)
 
 RE_STORY = re.compile(r"^##\s*第(\d+)篇[:：]\s*(.+)$", re.M)
 RE_ENTRY = re.compile(r"^###\s*第(\d+)条[｜|]\s*(.+?)（对应梗文第(\d+)篇《(.+?)》）", re.M)
-RE_SHOT = re.compile(r"\*\*镜头(\d)（约(\d+)秒 \| ([^）]+)）\*\*\n画面提示词：\n(.*?)\n\n台词字幕：\n(.*?)(?=\n\n---|\Z)", re.S)
+RE_SHOT = re.compile(r"镜头 (\d)｜(\d+-\d+)s\n画面：(.*?)\n字幕【心声】：(.*?)(?=\n\n镜头|\n\n---|\Z)", re.S)
 RE_FIG = re.compile(r"\*\*图(\d)/5[｜|]\s*(.+?)\*\*\s*\n提示词：(.*?)(?=\n\n\*\*图|\n---|\Z)", re.S)
 
 
@@ -62,7 +62,7 @@ def parse_media(folder, kind):
             end = nxt.start() if nxt else len(text)
             seg = text[start:end]
             if kind == "video":
-                shots = [{"i": int(s[0]), "sec": int(s[1]), "sub": s[2].strip(), "p": s[3].strip(), "l": s[4].strip()} for s in RE_SHOT.findall(seg)]
+                shots = [{"i": int(s[0]), "tl": s[1].strip(), "p": s[2].strip(), "l": s[3].strip()} for s in RE_SHOT.findall(seg)]
                 items.append({"n": num, "t": title, "sn": story_n, "st": story_t, "vol": vol, "shots": shots})
             else:
                 figs = [{"i": int(f[0]), "t": f[1].strip(), "p": f[2].strip()} for f in RE_FIG.findall(seg)]
@@ -285,7 +285,7 @@ let cur = "stories", q = "";
 const VOLS = {1:"课堂基本功",2:"课堂互动",3:"提问与作业",4:"批改与备课",5:"教学与关心学生",6:"暖心小动作",7:"尊重学生与考试",8:"讲评与课堂管理",9:"放学与职业日常",10:"校园点滴"};
 function storyBody(s){ return s.ps.map(p=>`<p>${esc(p)}</p>`).join(""); }
 function videoBody(v){
-  const shot = v.shots.map(s=>`<span class="lab">镜头${s.i}｜约${s.sec}秒 · ${esc(s.sub)} · 画面提示词</span><div class="pv">${esc(s.p)}</div><span class="lab">台词字幕</span><div class="lc">${esc(s.l)}</div>`).join("");
+  const shot = v.shots.map(s=>`<span class="lab">镜头${s.i}｜${s.tl}s · 画面</span><div class="pv">${esc(s.p)}</div><span class="lab">字幕【心声】</span><div class="lc">${esc(s.l)}</div>`).join("");
   return `<p class="dim">对应梗文第${v.sn}篇《${esc(v.st)}》 · 提示词可直接粘贴进即梦"视频生成"，比例 9:16</p>${shot}`;
 }
 function imageBody(m){
