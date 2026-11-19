@@ -139,15 +139,90 @@ def parse_storyboards():
     items.sort(key=lambda x: x["n"])
     return items
 
+def sb15_doubao_text(n, title, ps):
+    """15秒分镜的豆包版纯文本：表格→行式，一次复制即用"""
+    lines = [f"【第{n:03d}篇｜{title} · 15秒分镜（豆包版）】",
+             "画幅9:16｜总时长15秒（单段一次生成）｜主角：37岁中国男性教师（林老师），国字脸，黑色短发，白衬衫深色西裤",
+             "全局画风（生成时附加）：写实短剧风格，8K超清，纪实拍摄质感", ""]
+    table_map = {}
+    for p in ps:
+        if p == "---" or p.startswith("> "):
+            continue
+        if p.startswith("|"):
+            for r in p.splitlines():
+                r = r.strip()
+                if not r.startswith("|"):
+                    continue
+                cells = [c.strip() for c in r.strip("|").split("|")]
+                if len(cells) < 11 or cells[0] in ("cut", "") or set(cells[2]) <= {"-"}:
+                    continue
+                cn, tl, sec, size, cam, lens, pos, comp, eye, foc, stab = cells[:11]
+                table_map[cn] = (f"{tl}（{sec}秒）", SIZE_CN.get(size, size), cam, lens, pos, comp, eye, foc, stab)
+            continue
+        if p.startswith("**段 "):
+            lines += ["", "■ " + p.strip("*")]
+            continue
+        if p.startswith("- blocking") or p.startswith("- soundscape") or p.startswith("- music"):
+            m = re.match(r"- (\w+)：(.+)", p)
+            if m:
+                lines.append("◆ " + m.group(1) + "：" + m.group(2))
+            continue
+        if p.startswith("**cut"):
+            cn = re.match(r"\*\*cut (\d+)（([^）]+)）\*\*", p)
+            key = cn.group(1) if cn else ""
+            tl = cn.group(2) if cn else ""
+            fr = re.search(r"- frame：(.+)", p)
+            sh = re.search(r"- shot：(.+)", p)
+            sx = re.search(r"- sfx：(.+)", p)
+            hs = re.search(r"- 心声：(.+)", p)
+            info = table_map.get(key)
+            if info:
+                tl2, size_cn, cam, lens, pos, comp, eye, foc, stab = info
+                lines.append("")
+                lines.append(f"▸ cut{key}｜{tl2}｜{size_cn}｜运镜：{cam}｜{lens}｜机位：{pos}｜构图：{comp}")
+                lines.append(f"   视线：{eye}｜焦点：{foc}｜稳定性：{stab}")
+            lines.append("【分镜图】" + (fr.group(1) if fr else ""))
+            lines.append("【镜头正文】" + (sh.group(1) if sh else ""))
+            if hs:
+                lines.append("【心声·画外】" + hs.group(1))
+            lines.append("【音效】" + (sx.group(1) if sx else ""))
+            continue
+        if p.startswith("**时长核算"):
+            lines += ["", "■ " + p.strip("*")]
+            continue
+        lines.append(p)
+    return "\n".join(lines)
+
+RE_SB15 = re.compile(r"^##\s*第(\d+)篇[:：]\s*(.+)$", re.M)
+
+def parse_storyboard15s():
+    items = []
+    for path in sorted(glob.glob(os.path.join(BASE, "分镜提示词15秒", "*.md"))):
+        vol = int(re.sub(r"^.*?第(\d+)卷.*$", r"\1", os.path.basename(path)))
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        ms = list(RE_SB15.finditer(text))
+        for i, m in enumerate(ms):
+            end = ms[i+1].start() if i+1 < len(ms) else len(text)
+            body = text[m.end():end].strip()
+            paras = [p.strip() for p in body.split("\n\n") if p.strip()]
+            n = int(m.group(1))
+            items.append({"n": n, "t": m.group(2).strip(), "vol": vol, "ps": paras,
+                          "txt": sb15_doubao_text(n, m.group(2).strip(), paras)})
+    items.sort(key=lambda x: x["n"])
+    return items
+
 data = {
     "stories": parse_stories(),
     "videos": parse_media("文生视频文案", "video"),
     "images": parse_media("文生图片文案", "image"),
     "storyboards": parse_storyboards(),
+    "sb15": parse_storyboard15s(),
 }
 
 assert len(data["stories"]) == 100, f"梗文 {len(data['stories'])}"
 assert len(data["storyboards"]) == 100, f"分镜 {len(data['storyboards'])}"
+assert len(data["sb15"]) == 100, f"15秒分镜 {len(data['sb15'])}"
 assert len(data["videos"]) == 100, f"视频 {len(data['videos'])}"
 assert len(data["images"]) == 100, f"图片 {len(data['images'])}"
 bad_shots = [v["n"] for v in data["videos"] if len(v["shots"]) != 3]
@@ -274,6 +349,7 @@ footer .big{font-size:16px;color:var(--chalk);margin-bottom:10px}
   <div class="stats">
     <div class="stat"><b>100</b><span>篇梗文成文</span></div>
     <div class="stat"><b>100</b><span>篇分镜提示词</span></div>
+    <div class="stat"><b>100</b><span>篇15秒单段分镜</span></div>
     <div class="stat"><b>300</b><span>镜视频提示词</span></div>
     <div class="stat"><b>500</b><span>张图提示词</span></div>
     <div class="stat"><b>100%</b><span>机检通过</span></div>
@@ -339,6 +415,7 @@ footer .big{font-size:16px;color:var(--chalk);margin-bottom:10px}
   <div class="tabs">
     <div class="tab on" data-tab="stories">📖 梗文库 · 100 篇</div>
     <div class="tab" data-tab="storyboards">🎞️ 分镜提示词 · 100 篇</div>
+    <div class="tab" data-tab="sb15">⏱️ 15秒分镜 · 100 篇</div>
     <div class="tab" data-tab="videos">🎬 视频文案 · 100 条</div>
     <div class="tab" data-tab="images">🖼️ 图片文案 · 100 条</div>
   </div>
@@ -359,9 +436,14 @@ const DATA = JSON.parse(document.getElementById("data").textContent);
 const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 let cur = "stories", q = "";
 const VOLS = {1:"课堂基本功",2:"课堂互动",3:"提问与作业",4:"批改与备课",5:"教学与关心学生",6:"暖心小动作",7:"尊重学生与考试",8:"讲评与课堂管理",9:"放学与职业日常",10:"校园点滴"};
-function storyBody(s){ return `<button class="copybtn ghost" data-label="📋 复制梗文原文" onclick="copyStory(${s.n},this)">📋 复制梗文原文</button>` + s.ps.map(p=>`<p>${esc(p)}</p>`).join(""); }
+function storyBody(s){ return `<button class="copybtn ghost" data-label="📋 复制梗文原文" data-n="${s.n}" onclick="copyStory(${s.n},this)">📋 复制梗文原文</button>` + s.ps.map(p=>`<p>${esc(p)}</p>`).join(""); }
 function copySB(n, btn){
   const sb = DATA.storyboards.find(x=>x.n===n);
+  if(!sb){ return; }
+  doCopy(sb.txt, btn);
+}
+function copySB15(n, btn){
+  const sb = DATA.sb15.find(x=>x.n===n);
   if(!sb){ return; }
   doCopy(sb.txt, btn);
 }
@@ -372,9 +454,12 @@ function copyStory(n, btn){
 }
 function doCopy(txt, btn){
   const ok = ()=>{ if(!btn) return; btn.textContent = "✅ 已复制，去豆包粘贴即可"; setTimeout(()=>{ btn.textContent = btn.dataset.label; }, 2200); };
+  let done = false;
+  const finish = ()=>{ if(done) return; done = true; ok(); };
   if(navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(txt).then(ok).catch(()=>fallbackCopy(txt, ok));
-  } else { fallbackCopy(txt, ok); }
+    navigator.clipboard.writeText(txt).then(finish).catch(()=>fallbackCopy(txt, finish));
+    setTimeout(()=>{ if(!done) fallbackCopy(txt, finish); }, 800);
+  } else { fallbackCopy(txt, finish); }
 }
 function fallbackCopy(txt, cb){
   const ta = document.createElement("textarea");
@@ -392,7 +477,8 @@ function mdPara(p){
   h = h.split("\n").map(l=>l.startsWith("- ")?`<span style="display:block;margin:4px 0">• ${l.slice(2)}</span>`:l).join("\n");
   return `<p style="white-space:pre-line">${h}</p>`;
 }
-function storyboardBody(sb){ return `<button class="copybtn" data-label="📋 一键复制豆包版提示词（整篇一次复制）" onclick="copySB(${sb.n},this)">📋 一键复制豆包版提示词（整篇一次复制）</button><p class="dim">shuohao 风格分镜 · 对应梗文第${sb.n}篇 · 段→cuts 三层结构 · 下方为阅读版，点上方按钮得豆包粘贴版</p>` + sb.ps.map(mdPara).join(""); }
+function storyboardBody(sb){ return `<button class="copybtn" data-label="📋 一键复制豆包版提示词（整篇一次复制）" data-n="${sb.n}" onclick="copySB(${sb.n},this)">📋 一键复制豆包版提示词（整篇一次复制）</button><p class="dim">shuohao 风格分镜 · 对应梗文第${sb.n}篇 · 段→cuts 三层结构 · 下方为阅读版，点上方按钮得豆包粘贴版</p>` + sb.ps.map(mdPara).join(""); }
+function sb15Body(sb){ return `<button class="copybtn" data-label="📋 一键复制15秒分镜（整段一次生成）" data-n="${sb.n}" onclick="copySB15(${sb.n},this)">📋 一键复制15秒分镜（单段15秒，一次生成一个视频）</button><p class="dim">对应梗文第${sb.n}篇 · 单段 0-15s（4+6+5=15秒）· 心声台词已逐字写进镜头正文 · 下方为阅读版，点上方按钮得豆包粘贴版</p>` + sb.ps.map(mdPara).join(""); }
 function videoBody(v){
   const shot = v.shots.map(s=>`<span class="lab">镜头${s.i}｜${s.tl}s · 画面</span><div class="pv">${esc(s.p)}</div><span class="lab">字幕【心声】</span><div class="lc">${esc(s.l)}</div>`).join("");
   return `<p class="dim">对应梗文第${v.sn}篇《${esc(v.st)}》 · 提示词可直接粘贴进即梦"视频生成"，比例 9:16</p>${shot}`;
@@ -414,6 +500,7 @@ function render(){
     let body, meta;
     if(cur==="stories"){ body=storyBody(it); meta=`卷${Math.ceil(it.n/10)} · ${VOLS[Math.ceil(it.n/10)]}`; }
     else if(cur==="storyboards"){ body=storyboardBody(it); meta=`第${it.vol}卷 ${VOLS[it.vol]} · 分镜`; }
+    else if(cur==="sb15"){ body=sb15Body(it); meta=`第${it.vol}卷 ${VOLS[it.vol]} · 15秒单段`; }
     else if(cur==="videos"){ body=videoBody(it); meta=`第${it.vol}卷 ${VOLS[it.vol]} · 3镜`; }
     else { body=imageBody(it); meta=`第${it.vol}卷 ${VOLS[it.vol]} · 5图`; }
     return `<details><summary><span class="no">#${String(it.n).padStart(3,"0")}</span><span class="tt">${esc(it.t)}</span><span class="meta">${meta}</span></summary><div class="body">${body}</div></details>`;

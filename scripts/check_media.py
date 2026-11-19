@@ -59,6 +59,36 @@ def check_video():
     return nums, bad
 
 
+
+
+def check_sb15():
+    files = sorted(glob.glob(os.path.join(BASE, "分镜提示词15秒", "*.md")))
+    nums, bad = [], 0
+    print(f"== 15秒分镜: {len(files)} 卷 ==")
+    for path in files:
+        text = open(path, encoding="utf-8").read()
+        ms = list(re.finditer(r"^##\s*第(\d+)篇[:：]\s*(.+)$", text, re.M))
+        es = [(int(m.group(1)), m.group(2), text[m.end(): ms[i+1].start() if i+1 < len(ms) else len(text)])
+              for i, m in enumerate(ms)]
+        print(f"  {os.path.basename(path)}: {len(es)} 篇")
+        if len(es) != 10:
+            print(f"    [FAIL] 篇数{len(es)}"); bad += 1
+        for n, title, body in es:
+            nums.append(n)
+            for t in ["总时长 **15秒**", "| 0-4s |", "| 4-10s |", "| 10-15s |", "时长核算", "= **15秒**"]:
+                if t not in body:
+                    print(f"    [FAIL] {n} 缺 {t}"); bad += 1
+            if body.count("心声（画外") != 3:
+                print(f"    [FAIL] {n} 心声数"); bad += 1
+            if "失传绝技" not in body or "大法了！哈哈哈哈！" not in body:
+                print(f"    [FAIL] {n} 绝技OS"); bad += 1
+            if "冷汗直流" not in body or "弯腰陪笑" not in body:
+                print(f"    [FAIL] {n} 领导加强"); bad += 1
+            if "平视平视" in body:
+                print(f"    [FAIL] {n} 机位重复"); bad += 1
+    return nums, bad
+
+
 def check_image():
     files = sorted(glob.glob(os.path.join(BASE, "文生图片文案", "*.md")))
     nums, bad = [], 0
@@ -81,15 +111,16 @@ def check_image():
 
 def main():
     vn, vp = check_video()
+    s15, s15p = check_sb15()
     iv, ip = check_image()
-    for label, nums in (("视频", vn), ("图片", iv)):
+    for label, nums in (("视频", vn), ("图片", iv), ("15秒分镜", s15)):
         dup = sorted({n for n in nums if nums.count(n) > 1})
         miss = sorted(set(range(1, 101)) - set(nums))
         if dup: print(f"[FAIL] {label}重复 {dup}")
         if miss: print(f"[FAIL] {label}缺失 {miss}")
-    total = vp + ip
-    print(f"\n汇总：视频 {len(vn)} / 图片 {len(iv)}，问题 {total}")
-    if total == 0 and len(vn) == 100 and len(iv) == 100:
+    total = vp + ip + s15p
+    print(f"\n汇总：视频 {len(vn)} / 分镜 {len(s15)} / 图片 {len(iv)}，问题 {total}")
+    if total == 0 and len(vn) == 100 and len(iv) == 100 and len(s15) == 100:
         print("✅ 媒体文案机检全部通过"); sys.exit(0)
     print("❌ 机检未通过"); sys.exit(1)
 
