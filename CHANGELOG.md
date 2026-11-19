@@ -3,6 +3,17 @@
 本项目所有重要变更都记录在此文件中。
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semver](https://semver.org/lang/zh-CN/)。
 
+## [1.6.0] - 2026-11-19
+
+### Added
+
+- **分镜提示词库 100 篇**（`分镜提示词/分镜提示词第01~10卷.md`，篇号对应梗文）：参照 `eternityspring/shuohao-skills` 的 novel-storyboard 风格改写——段（≤15秒）→ cuts（2-5秒）三层结构，每 cut 带景别/运镜/焦距/机位/构图/视线/焦点/稳定性量化字段 + `frame`（直呼角色名的分镜图提示词）+ `shot`（通用身份的镜头正文）+ `sfx`，段级带 blocking/soundscape/music，台词逐字取自已验收梗文
+- 展示站新增第 4 个 Tab「🎞️ 分镜提示词 · 100 篇」，四库并列（梗文/分镜/视频/图片），与前两篇手工样板同风格
+
+### 校准记录
+
+- 用户要求原文梗文库 100 篇保留不动，分镜提示词作为**独立新增库**，不是替换
+
 ## [1.5.0] - 2026-11-19
 
 ### Changed

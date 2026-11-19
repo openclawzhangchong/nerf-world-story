@@ -71,13 +71,32 @@ def parse_media(folder, kind):
     return items
 
 
+RE_SB = re.compile(r"^##\s*第(\d+)篇[:：]\s*(.+)$", re.M)
+
+def parse_storyboards():
+    items = []
+    for path in sorted(glob.glob(os.path.join(BASE, "分镜提示词", "*.md"))):
+        vol = int(re.sub(r"^.*?第(\d+)卷.*$", r"\1", os.path.basename(path)))
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        ms = list(RE_SB.finditer(text))
+        for i, m in enumerate(ms):
+            end = ms[i+1].start() if i+1 < len(ms) else len(text)
+            body = text[m.end():end].strip()
+            paras = [p.strip() for p in body.split("\n\n") if p.strip()]
+            items.append({"n": int(m.group(1)), "t": m.group(2).strip(), "vol": vol, "ps": paras})
+    items.sort(key=lambda x: x["n"])
+    return items
+
 data = {
     "stories": parse_stories(),
     "videos": parse_media("文生视频文案", "video"),
     "images": parse_media("文生图片文案", "image"),
+    "storyboards": parse_storyboards(),
 }
 
 assert len(data["stories"]) == 100, f"梗文 {len(data['stories'])}"
+assert len(data["storyboards"]) == 100, f"分镜 {len(data['storyboards'])}"
 assert len(data["videos"]) == 100, f"视频 {len(data['videos'])}"
 assert len(data["images"]) == 100, f"图片 {len(data['images'])}"
 bad_shots = [v["n"] for v in data["videos"] if len(v["shots"]) != 3]
@@ -178,6 +197,7 @@ p.secdesc{color:var(--chalk-dim);font-size:15px;margin-bottom:30px;max-width:760
 .list .body .pv{background:rgba(0,0,0,.16);border-left:3px solid var(--yellow);border-radius:0 8px 8px 0;padding:10px 14px;margin:8px 0;font-size:13px;color:var(--chalk);text-align:justify}
 .list .body .lc{background:rgba(242,162,162,.08);border-left:3px solid var(--pink);border-radius:0 8px 8px 0;padding:10px 14px;margin:8px 0;font-size:13px;color:var(--chalk);text-align:justify}
 .list .body .dim{color:var(--chalk-dim);font-size:13px}
+pre.mdtable{background:rgba(0,0,0,.2);border-radius:6px;padding:8px 10px;overflow-x:auto;font-family:Consolas,Monaco,monospace;font-size:11px;color:var(--blue,#a8c8e8);white-space:pre;line-height:1.5;margin:8px 0}
 footer{padding:44px 0 60px;text-align:center;color:var(--chalk-dim);font-size:13px}
 footer .big{font-size:16px;color:var(--chalk);margin-bottom:10px}
 .chalk-line{height:3px;background:repeating-linear-gradient(90deg,var(--yellow) 0 14px,transparent 14px 26px);border-radius:2px;opacity:.35;margin-top:10px}
@@ -199,6 +219,7 @@ footer .big{font-size:16px;color:var(--chalk);margin-bottom:10px}
   <p class="sub">一个可安装的 AI 技能包：让任何 AI 都能稳定写出「降智爽文梗」——技能普通到废、领导层层发癫、结尾惊动教育局。附带 100 篇成文、100 条文生视频文案、100 条文生图片文案，全部开源。</p>
   <div class="stats">
     <div class="stat"><b>100</b><span>篇梗文成文</span></div>
+    <div class="stat"><b>100</b><span>篇分镜提示词</span></div>
     <div class="stat"><b>300</b><span>镜视频提示词</span></div>
     <div class="stat"><b>500</b><span>张图提示词</span></div>
     <div class="stat"><b>100%</b><span>机检通过</span></div>
@@ -263,6 +284,7 @@ footer .big{font-size:16px;color:var(--chalk);margin-bottom:10px}
   <p class="secdesc">三套内容一一对应：每篇梗文 → 一条 3 镜视频文案 → 一条 5 图图片文案。点开条目读全文，提示词可直接复制进即梦生成。</p>
   <div class="tabs">
     <div class="tab on" data-tab="stories">📖 梗文库 · 100 篇</div>
+    <div class="tab" data-tab="storyboards">🎞️ 分镜提示词 · 100 篇</div>
     <div class="tab" data-tab="videos">🎬 视频文案 · 100 条</div>
     <div class="tab" data-tab="images">🖼️ 图片文案 · 100 条</div>
   </div>
@@ -284,6 +306,13 @@ const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;
 let cur = "stories", q = "";
 const VOLS = {1:"课堂基本功",2:"课堂互动",3:"提问与作业",4:"批改与备课",5:"教学与关心学生",6:"暖心小动作",7:"尊重学生与考试",8:"讲评与课堂管理",9:"放学与职业日常",10:"校园点滴"};
 function storyBody(s){ return s.ps.map(p=>`<p>${esc(p)}</p>`).join(""); }
+function mdPara(p){
+  if(p.startsWith("|")) return `<pre class="mdtable">${esc(p)}</pre>`;
+  if(p.startsWith("### ")) return `<h3 style="color:var(--yellow);margin:16px 0 8px;font-size:16px">${esc(p.slice(4))}</h3>`;
+  if(p.startsWith("- **")) return `<p style="color:var(--chalk-dim);font-size:13px;margin:6px 0">${esc(p)}</p>`;
+  return `<p>${esc(p)}</p>`;
+}
+function storyboardBody(sb){ return `<p class="dim">shuohao 风格分镜 · 对应梗文第${sb.n}篇 · 段→cuts 三层结构</p>` + sb.ps.map(mdPara).join(""); }
 function videoBody(v){
   const shot = v.shots.map(s=>`<span class="lab">镜头${s.i}｜${s.tl}s · 画面</span><div class="pv">${esc(s.p)}</div><span class="lab">字幕【心声】</span><div class="lc">${esc(s.l)}</div>`).join("");
   return `<p class="dim">对应梗文第${v.sn}篇《${esc(v.st)}》 · 提示词可直接粘贴进即梦"视频生成"，比例 9:16</p>${shot}`;
@@ -304,6 +333,7 @@ function render(){
   document.getElementById("list").innerHTML = items.map(it=>{
     let body, meta;
     if(cur==="stories"){ body=storyBody(it); meta=`卷${Math.ceil(it.n/10)} · ${VOLS[Math.ceil(it.n/10)]}`; }
+    else if(cur==="storyboards"){ body=storyboardBody(it); meta=`第${it.vol}卷 ${VOLS[it.vol]} · 分镜`; }
     else if(cur==="videos"){ body=videoBody(it); meta=`第${it.vol}卷 ${VOLS[it.vol]} · 3镜`; }
     else { body=imageBody(it); meta=`第${it.vol}卷 ${VOLS[it.vol]} · 5图`; }
     return `<details><summary><span class="no">#${String(it.n).padStart(3,"0")}</span><span class="tt">${esc(it.t)}</span><span class="meta">${meta}</span></summary><div class="body">${body}</div></details>`;
