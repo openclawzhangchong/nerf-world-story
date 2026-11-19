@@ -15,6 +15,12 @@
 - ✅ **即梦文生视频文案 100 条**（文生视频文案/，每条 3 镜分镜）+ **文生图片文案 100 条**（文生图片文案/，每条 5 图连串对应五段公式）；主角统一为 37岁中国男性教师 180cm 白衬衫（用户本人形象）；竖屏 9:16 写实短剧风；全中文命名分 10 卷
 - ✅ /test 机检脚本 `scripts/check.py` + `scripts/check_media.py` + 检查规范 `docs/checklist.md` 就位
 - ✅ 已开源：https://github.com/openclawzhangchong/nerf-world-story
+- ✅ **展示站四平台同步上线**（内容一致，均验证 HTTP 200）：
+  - ZCode Sites：https://nerf-world-story-bf8a.zai-ai.site
+  - GitHub Pages：https://openclawzhangchong.github.io/nerf-world-story/
+  - here.now（永久）：https://nutmeg-glider-6fhc.here.now/
+  - Cloudflare Pages：https://nerf-world-story.pages.dev
+- ✅ 100 条视频文案已按用户定稿的新分镜标准重写（6/7/7 秒黄金节奏、音画自洽、单主体单运镜、人设前置、转场移交剪辑），机检 0 问题
 - ⬜ 暂无英文版、暂无实际生成样片验证（提示词未经即梦实跑，首次批量生成时留意人物一致性与字幕排版）
 
 ## 用户验收标准（已定，不要推翻）
