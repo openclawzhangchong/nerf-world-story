@@ -73,6 +73,55 @@ def parse_media(folder, kind):
 
 RE_SB = re.compile(r"^##\s*第(\d+)篇[:：]\s*(.+)$", re.M)
 
+SIZE_CN = {"medium": "中景", "close-up": "特写", "extreme-wide": "大远景", "wide": "全景",
+           "medium-wide": "中全景", "extreme-close-up": "大特写", "close": "特写"}
+
+def sb_doubao_text(n, title, ps):
+    """把一篇分镜转成豆包友好的纯文本（表格→逐cut行式，一次复制即用）"""
+    lines = [f"【第{n:03d}篇｜{title} · 分镜提示词（豆包版）】",
+             "画幅9:16｜全条约21秒｜主角：37岁中国男性教师，国字脸，黑色短发，白衬衫深色西裤", ""]
+    table_map = {}
+    for p in ps:
+        if p == "---":
+            continue
+        if p.startswith("|"):
+            for r in p.splitlines():
+                r = r.strip()
+                if not r.startswith("|"):
+                    continue
+                cells = [c.strip() for c in r.strip("|").split("|")]
+                if len(cells) < 10 or cells[0] in ("cut", "") or set(cells[1]) <= {"-"}:
+                    continue
+                cn, sec, size, cam, lens, pos, comp, eye, foc, stab = cells[:10]
+                table_map[cn] = (f"{sec}秒", SIZE_CN.get(size, size), cam, lens, pos, comp, eye, foc, stab)
+            continue
+        if p.startswith("### "):
+            lines += ["", "■ " + p[4:]]
+            continue
+        if p.startswith("- **"):
+            m = re.match(r"- \*\*(.+?)\*\*：(.+)", p)
+            if m:
+                lines.append("◆ " + m.group(1) + "：" + m.group(2))
+            continue
+        if p.startswith("**cut"):
+            cn = re.match(r"\*\*(cut \d+)\*\*", p).group(1)  # e.g. cut 1
+            key = cn.split()[1]
+            fr = re.search(r"- `frame`：(.+)", p)
+            sh = re.search(r"- `shot`：(.+)", p)
+            sx = re.search(r"- `sfx`：(.+)", p)
+            info = table_map.get(key)
+            if info:
+                sec, size_cn, cam, lens, pos, comp, eye, foc, stab = info
+                lines.append("")
+                lines.append(f"▸ {cn}（{sec}｜{size_cn}｜运镜：{cam}｜{lens}｜机位：{pos}｜构图：{comp}）")
+                lines.append(f"   视线：{eye}｜焦点：{foc}｜稳定性：{stab}")
+            lines.append("【分镜图】" + (fr.group(1) if fr else ""))
+            lines.append("【镜头正文】" + (sh.group(1) if sh else ""))
+            lines.append("【音效】" + (sx.group(1) if sx else ""))
+            continue
+        lines.append(p)
+    return "\n".join(lines)
+
 def parse_storyboards():
     items = []
     for path in sorted(glob.glob(os.path.join(BASE, "分镜提示词", "*.md"))):
@@ -84,7 +133,9 @@ def parse_storyboards():
             end = ms[i+1].start() if i+1 < len(ms) else len(text)
             body = text[m.end():end].strip()
             paras = [p.strip() for p in body.split("\n\n") if p.strip()]
-            items.append({"n": int(m.group(1)), "t": m.group(2).strip(), "vol": vol, "ps": paras})
+            n = int(m.group(1))
+            items.append({"n": n, "t": m.group(2).strip(), "vol": vol, "ps": paras,
+                          "txt": sb_doubao_text(n, m.group(2).strip(), paras)})
     items.sort(key=lambda x: x["n"])
     return items
 
@@ -197,6 +248,9 @@ p.secdesc{color:var(--chalk-dim);font-size:15px;margin-bottom:30px;max-width:760
 .list .body .pv{background:rgba(0,0,0,.16);border-left:3px solid var(--yellow);border-radius:0 8px 8px 0;padding:10px 14px;margin:8px 0;font-size:13px;color:var(--chalk);text-align:justify}
 .list .body .lc{background:rgba(242,162,162,.08);border-left:3px solid var(--pink);border-radius:0 8px 8px 0;padding:10px 14px;margin:8px 0;font-size:13px;color:var(--chalk);text-align:justify}
 .list .body .dim{color:var(--chalk-dim);font-size:13px}
+.copybtn{position:sticky;top:62px;z-index:5;display:block;width:100%;margin:0 0 14px;padding:12px 18px;border-radius:12px;background:var(--yellow);color:#233024;border:none;font-weight:800;font-size:15px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.copybtn:hover{filter:brightness(1.06)}
+.copybtn.ghost{background:rgba(247,215,116,.12);color:var(--yellow);border:1px dashed rgba(247,215,116,.5);font-weight:600;box-shadow:none}
 pre.mdtable{background:rgba(0,0,0,.2);border-radius:6px;padding:8px 10px;overflow-x:auto;font-family:Consolas,Monaco,monospace;font-size:11px;color:var(--blue,#a8c8e8);white-space:pre;line-height:1.5;margin:8px 0}
 footer{padding:44px 0 60px;text-align:center;color:var(--chalk-dim);font-size:13px}
 footer .big{font-size:16px;color:var(--chalk);margin-bottom:10px}
@@ -305,14 +359,40 @@ const DATA = JSON.parse(document.getElementById("data").textContent);
 const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 let cur = "stories", q = "";
 const VOLS = {1:"课堂基本功",2:"课堂互动",3:"提问与作业",4:"批改与备课",5:"教学与关心学生",6:"暖心小动作",7:"尊重学生与考试",8:"讲评与课堂管理",9:"放学与职业日常",10:"校园点滴"};
-function storyBody(s){ return s.ps.map(p=>`<p>${esc(p)}</p>`).join(""); }
+function storyBody(s){ return `<button class="copybtn ghost" data-label="📋 复制梗文原文" onclick="copyStory(${s.n},this)">📋 复制梗文原文</button>` + s.ps.map(p=>`<p>${esc(p)}</p>`).join(""); }
+function copySB(n, btn){
+  const sb = DATA.storyboards.find(x=>x.n===n);
+  if(!sb){ return; }
+  doCopy(sb.txt, btn);
+}
+function copyStory(n, btn){
+  const s = DATA.stories.find(x=>x.n===n);
+  if(!s){ return; }
+  doCopy(`【第${String(s.n).padStart(3,"0")}篇｜${s.t}】\n` + s.ps.join("\n\n"), btn);
+}
+function doCopy(txt, btn){
+  const ok = ()=>{ if(!btn) return; btn.textContent = "✅ 已复制，去豆包粘贴即可"; setTimeout(()=>{ btn.textContent = btn.dataset.label; }, 2200); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(ok).catch(()=>fallbackCopy(txt, ok));
+  } else { fallbackCopy(txt, ok); }
+}
+function fallbackCopy(txt, cb){
+  const ta = document.createElement("textarea");
+  ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try { document.execCommand("copy"); cb(); } catch(e) { window.prompt("请手动全选复制：", txt); }
+  document.body.removeChild(ta);
+}
 function mdPara(p){
   if(p.startsWith("|")) return `<pre class="mdtable">${esc(p)}</pre>`;
   if(p.startsWith("### ")) return `<h3 style="color:var(--yellow);margin:16px 0 8px;font-size:16px">${esc(p.slice(4))}</h3>`;
-  if(p.startsWith("- **")) return `<p style="color:var(--chalk-dim);font-size:13px;margin:6px 0">${esc(p)}</p>`;
-  return `<p>${esc(p)}</p>`;
+  let h = esc(p)
+    .replace(/\*\*(.+?)\*\*/g, "<b style='color:var(--yellow)'>$1</b>")
+    .replace(/`(.+?)`/g, "<b style='color:var(--pink)'>$1</b>");
+  h = h.split("\n").map(l=>l.startsWith("- ")?`<span style="display:block;margin:4px 0">• ${l.slice(2)}</span>`:l).join("\n");
+  return `<p style="white-space:pre-line">${h}</p>`;
 }
-function storyboardBody(sb){ return `<p class="dim">shuohao 风格分镜 · 对应梗文第${sb.n}篇 · 段→cuts 三层结构</p>` + sb.ps.map(mdPara).join(""); }
+function storyboardBody(sb){ return `<button class="copybtn" data-label="📋 一键复制豆包版提示词（整篇一次复制）" onclick="copySB(${sb.n},this)">📋 一键复制豆包版提示词（整篇一次复制）</button><p class="dim">shuohao 风格分镜 · 对应梗文第${sb.n}篇 · 段→cuts 三层结构 · 下方为阅读版，点上方按钮得豆包粘贴版</p>` + sb.ps.map(mdPara).join(""); }
 function videoBody(v){
   const shot = v.shots.map(s=>`<span class="lab">镜头${s.i}｜${s.tl}s · 画面</span><div class="pv">${esc(s.p)}</div><span class="lab">字幕【心声】</span><div class="lc">${esc(s.l)}</div>`).join("");
   return `<p class="dim">对应梗文第${v.sn}篇《${esc(v.st)}》 · 提示词可直接粘贴进即梦"视频生成"，比例 9:16</p>${shot}`;
